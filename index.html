@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>忍者杀手 vs 消耗</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; overflow: hidden; height: 100vh; }
+        .screen { display: none; width: 100%; height: 100vh; position: absolute; top: 0; left: 0; }
+        .screen.active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #s0 { text-align: center; padding: 40px; }
+        #s0 h1 { font-size: 48px; margin-bottom: 30px; color: #ff6b6b; text-shadow: 0 0 20px rgba(255, 107, 107, 0.5); }
+        #s0 .intro { max-width: 800px; margin: 30px auto; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; line-height: 1.8; font-size: 18px; }
+        .start-btn { padding: 20px 60px; font-size: 24px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); border: none; border-radius: 50px; color: white; cursor: pointer; transition: all 0.3s; box-shadow: 0 10px 30px rgba(255,107,107,0.3); }
+        .start-btn:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(255,107,107,0.5); }
+        .video-container { width: 100%; height: 100vh; display: flex; justify-content: center; align-items: center; background: #000; }
+        video { max-width: 100%; max-height: 100vh; }
+        .question-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.9); padding: 40px; border-radius: 20px; text-align: center; max-width: 800px; border: 2px solid #ff6b6b; }
+        .question-text { font-size: 24px; margin-bottom: 30px; line-height: 1.6; }
+        .options { display: flex; flex-direction: column; gap: 15px; }
+        .option-btn { padding: 15px 30px; font-size: 20px; background: rgba(255,107,107,0.2); border: 2px solid #ff6b6b; border-radius: 10px; color: white; cursor: pointer; transition: all 0.3s; }
+        .option-btn:hover { background: rgba(255,107,107,0.5); transform: scale(1.05); }
+        .message { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.95); padding: 40px; border-radius: 20px; text-align: center; max-width: 600px; font-size: 24px; line-height: 1.6; border: 2px solid #ff6b6b; }
+        
+        #s5 { padding: 20px; text-align: center; justify-content: flex-start !important; padding-top: 40px; flex-direction: row !important; align-items: flex-start !important; }
+        #s5 h2 { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 48px; margin-bottom: 30px; color: #ff6b6b; text-shadow: 0 0 20px rgba(255,107,107,0.5); text-align: center; display: block; width: 100%; }
+        .s5-content { display: flex; flex-direction: row; width: 100%; margin-top: 80px; justify-content: center; }
+        #s5 .rating-section { width: 45%; margin-bottom: 0; padding-right: 20px; }
+        #s5 .ai-section { width: 45%; margin-bottom: 0; padding-left: 20px; border-left: 2px solid rgba(255,107,107,0.3); }
+        .rating-section h3 { font-size: 24px; margin-bottom: 20px; }
+        
+        .camera-container { width: 100%; height: 360px; margin: 20px auto; border-radius: 10px; overflow: hidden; border: 3px solid #ff6b6b; position: relative; background: #333; }
+        .camera-disabled { display: none !important; }
+        #webcam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+        
+        .stars { font-size: 48px; margin: 20px 0; }
+        .star { color: #444; transition: color 0.3s; }
+        .star.active { color: #ffd700; }
+        
+        .rating-message { font-size: 20px; margin-top: 20px; padding: 15px; background: rgba(255,107,107,0.2); border-radius: 10px; min-height: 60px; }
+        
+        .ai-section h3 { font-size: 24px; margin-bottom: 20px; }
+        .chat-container { background: rgba(255,255,255,0.1); border-radius: 10px; padding: 20px; height: 360px; overflow-y: auto; margin-bottom: 20px; text-align: left; }
+        .chat-message { margin-bottom: 15px; padding: 10px; border-radius: 8px; }
+        .user-message { background: rgba(255,107,107,0.3); margin-left: 50px; }
+        .ai-message { background: rgba(100,100,255,0.3); margin-right: 50px; }
+        .input-container { display: flex; gap: 10px; }
+        .chat-input { flex: 1; padding: 15px; border-radius: 10px; border: 2px solid #ff6b6b; background: rgba(255,255,255,0.1); color: white; font-size: 16px; }
+        .send-btn { padding: 15px 30px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); border: none; border-radius: 10px; color: white; cursor: pointer; font-size: 16px; transition: all 0.3s; }
+        .send-btn:hover { transform: scale(1.05); }
+        
+        #bgMusic { display: none; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <audio id="bgMusic" loop>
+        <source src="破晓星烛 - 【试听】怪物猎人荒野联动FF 游星欧米茄（大份） 阶段二.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="s0" class="screen active">
+        <h1>忍者杀手 vs 消耗</h1>
+        <div class="intro">
+            <p>在忍者的世界中，你将面对强大的敌人——消耗=san！</p>
+            <p>作为一名忍者，你需要运用智慧和勇气，在各种危机中做出正确的选择。</p>
+            <p>每一个决定都将影响你的命运，是成为真正的忍者，还是倒在敌人的术之下？</p>
+            <p>准备好迎接挑战了吗？</p>
+        </div>
+        <button class="start-btn" onclick="startGame()">开始游戏</button>
+    </div>
+
+    <div id="s1" class="screen">
+        <div class="video-container">
+            <video id="v1-1" onended="showQuestion1()"><source src="V1.1.mp4" type="video/mp4"></video>
+            <video id="v1-2" style="display:none;" onended="goToScreen('s2')"><source src="V1.2.mp4" type="video/mp4"></video>
+        </div>
+    </div>
+
+    <div id="s2" class="screen">
+        <div class="video-container">
+            <video id="v2-1" onended="showQuestion2()"><source src="V2.1.mp4" type="video/mp4"></video>
+            <video id="v2-2" style="display:none;" onended="goToScreen('s3')"><source src="V2.2.mp4" type="video/mp4"></video>
+        </div>
+    </div>
+
+    <div id="s3" class="screen">
+        <div class="video-container">
+            <video id="v3-1" onended="showQuestion3()"><source src="V3.1.mp4" type="video/mp4"></video>
+            <video id="v3-2" style="display:none;" onended="goToScreen('s4')"><source src="V3.2.mp4" type="video/mp4"></video>
+        </div>
+    </div>
+
+    <div id="s4" class="screen">
+        <div class="video-container">
+            <video id="v4" onended="goToScreen('s5')"><source src="V4.mp4" type="video/mp4"></video>
+        </div>
+    </div>
+
+    <div id="s5" class="screen">
+        <h2>感谢游玩！</h2>
+        <div class="s5-content">
+            <div class="rating-section">
+                <h3>请用手势为游戏评分</h3>
+                <p>（伸出手掌，手指数量对应星级，保持3秒确认）</p>
+                <div class="camera-container" id="cameraContainer">
+                    <video id="webcam" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+                <div class="stars">
+                    <span class="star" id="star1">★</span>
+                    <span class="star" id="star2">★</span>
+                    <span class="star" id="star3">★</span>
+                    <span class="star" id="star4">★</span>
+                    <span class="star" id="star5">★</span>
+                </div>
+                <div class="rating-message" id="ratingMessage">等待手势评分...</div>
+            </div>
+            <div class="ai-section">
+                <h3>有问题想问？</h3>
+                <div class="chat-container" id="chatContainer"></div>
+                <div class="input-container">
+                    <input type="text" class="chat-input" id="chatInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button class="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let bgMusic, gestureStartTime = null, lastGesture = null, currentRating = 0, hands, camera, ratingCompleted = false;
+
+        function init() {
+            bgMusic = document.getElementById('bgMusic');
+            bgMusic.volume = 0.3;
+        }
+
+        function startGame() {
+            bgMusic.play().catch(e => console.log('音频播放需要用户交互'));
+            goToScreen('s1');
+            playVideo('v1-1');
+        }
+
+        function goToScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            if (screenId === 's2') playVideo('v2-1');
+            else if (screenId === 's3') playVideo('v3-1');
+            else if (screenId === 's4') playVideo('v4');
+            else if (screenId === 's5' && !ratingCompleted) initMediaPipe();
+        }
+
+        function playVideo(videoId) {
+            const video = document.getElementById(videoId);
+            if (video) { video.style.display = 'block'; video.currentTime = 0; video.play().catch(e => console.log('视频播放失败:', e)); }
+        }
+
+        function showQuestion1() {
+            const container = document.querySelector('#s1 .video-container');
+            const div = document.createElement('div');
+            div.className = 'question-container';
+            div.innerHTML = `<div class="question-text">消耗=san发出了问候，你将</div><div class="options"><button class="option-btn" onclick="handleChoice1('greet')">像忍者一样回礼</button><button class="option-btn" onclick="handleChoice1('ambush')">趁机偷袭（ambush）!</button></div>`;
+            container.appendChild(div);
+        }
+
+        function handleChoice1(choice) {
+            document.querySelector('#s1 .question-container')?.remove();
+            if (choice === 'greet') {
+                document.getElementById('v1-1').style.display = 'none';
+                document.getElementById('v1-2').style.display = 'block';
+                playVideo('v1-2');
+            } else showMessage('在问候时偷袭是三下中的三下！请从头来过吧！');
+        }
+
+        function showQuestion2() {
+            const container = document.querySelector('#s2 .video-container');
+            const div = document.createElement('div');
+            div.className = 'question-container';
+            div.innerHTML = `<div class="question-text">消耗=san使用某种方法召唤来了大量乌鸦，作为马力术的使用者，他可以将这些乌鸦变为可怕的活体导弹！何等不妙的术，你将</div><div class="options"><button class="option-btn" onclick="handleChoice2('attack')">用龙卷拳将乌鸦击落！</button><button class="option-btn" onclick="handleChoice2('ignore')">放着不管！</button></div>`;
+            container.appendChild(div);
+        }
+
+        function handleChoice2(choice) {
+            document.querySelector('#s2 .question-container')?.remove();
+            if (choice === 'ignore') {
+                document.getElementById('v2-1').style.display = 'none';
+                document.getElementById('v2-2').style.display = 'block';
+                playVideo('v2-2');
+            } else showMessage('乌鸦数量过多，你正中消耗=san的风林火山，耗尽体力被乌鸦炸弹淹没了');
+        }
+
+        function showQuestion3() {
+            const container = document.querySelector('#s3 .video-container');
+            const div = document.createElement('div');
+            div.className = 'question-container';
+            div.innerHTML = `<div class="question-text">将你解救出消耗=san禁锢的，连忍者都不是的高木‧龕燈即将被乌鸦炸弹击中！你将</div><div class="options"><button class="option-btn" onclick="handleChoice3('save')">救他</button><button class="option-btn" onclick="handleChoice3('ignore')">不救他</button></div>`;
+            container.appendChild(div);
+        }
+
+        function handleChoice3(choice) {
+            document.querySelector('#s3 .question-container')?.remove();
+            if (choice === 'save') {
+                document.getElementById('v3-1').style.display = 'none';
+                document.getElementById('v3-2').style.display = 'block';
+                playVideo('v3-2');
+            } else showMessage('你与消耗缠斗许久，最终不敌使用了self马力术的敌人');
+        }
+
+        function showMessage(text) {
+            const container = document.querySelector('.screen.active .video-container') || document.querySelector('.screen.active');
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.innerHTML = `<p>${text}</p><button class="option-btn" style="margin-top:20px" onclick="returnToStart()">重新开始</button>`;
+            container.appendChild(div);
+        }
+
+        function returnToStart() {
+            document.querySelectorAll('.video-container video').forEach(v => { v.style.display = 'none'; v.pause(); });
+            document.querySelectorAll('.question-container, .message').forEach(el => el.remove());
+            document.getElementById('v1-1').style.display = 'block';
+            document.getElementById('v2-1').style.display = 'block';
+            document.getElementById('v3-1').style.display = 'block';
+            goToScreen('s0');
+        }
+
+        function disableCamera() {
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+            const container = document.getElementById('cameraContainer');
+            if (container) container.classList.add('camera-disabled');
+            const video = document.getElementById('webcam');
+            if (video) video.srcObject = null;
+        }
+
+        async function initMediaPipe() {
+            if (ratingCompleted) return;
+            
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            try {
+                hands = new window.Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+                hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
+                hands.onResults(results => {
+                    if (!video.videoWidth || !video.videoHeight) return;
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        for (const landmarks of results.multiHandLandmarks) {
+                            if (window.drawConnectors && window.HAND_CONNECTIONS) {
+                                window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                            }
+                            if (window.drawLandmarks) {
+                                window.drawLandmarks(ctx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+                            }
+                            
+                            const count = countFingers(landmarks);
+                            handleGesture(count);
+                        }
+                    } else {
+                        gestureStartTime = null;
+                        lastGesture = null;
+                        if (!ratingCompleted) {
+                            document.getElementById('ratingMessage').textContent = '等待手势评分...';
+                            document.getElementById('ratingMessage').style.background = 'rgba(255,107,107,0.2)';
+                        }
+                    }
+                });
+
+                camera = new window.Camera(video, {
+                    onFrame: async () => await hands.send({image: video}),
+                    width: 640, height: 480
+                });
+                await camera.start();
+                console.log('MediaPipe初始化成功');
+            } catch (error) {
+                console.error('MediaPipe初始化失败:', error);
+                document.getElementById('ratingMessage').textContent = '摄像头初始化失败，请刷新重试';
+            }
+        }
+
+        function countFingers(landmarks) {
+            let count = 0;
+            const wrist = landmarks[0];
+            
+            const fingers = [
+                { tip: 4, pip: 3, name: 'thumb' },
+                { tip: 8, pip: 6, name: 'index' },
+                { tip: 12, pip: 10, name: 'middle' },
+                { tip: 16, pip: 14, name: 'ring' },
+                { tip: 20, pip: 18, name: 'pinky' }
+            ];
+            
+            const extended = [];
+            
+            for (const finger of fingers) {
+                const tip = landmarks[finger.tip];
+                const pip = landmarks[finger.pip];
+                
+                const distTip = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
+                const distPip = Math.sqrt(Math.pow(pip.x - wrist.x, 2) + Math.pow(pip.y - wrist.y, 2));
+                
+                if (finger.name === 'thumb') {
+                    const mcp = landmarks[2];
+                    const distMcp = Math.sqrt(Math.pow(mcp.x - wrist.x, 2) + Math.pow(mcp.y - wrist.y, 2));
+                    if (distTip > distMcp * 1.3) { count++; extended.push(finger.name); }
+                } else {
+                    if (tip.y < pip.y && distTip > distPip * 1.2) { count++; extended.push(finger.name); }
+                }
+            }
+            
+            console.log('伸出的手指:', extended, '数量:', count);
+            return count;
+        }
+
+        function handleGesture(fingerCount) {
+            if (ratingCompleted) return;
+            
+            const now = Date.now();
+            const msg = document.getElementById('ratingMessage');
+            
+            if (fingerCount > 0 && fingerCount <= 5) {
+                if (fingerCount === lastGesture) {
+                    if (gestureStartTime === null) gestureStartTime = now;
+                    const elapsed = now - gestureStartTime;
+                    updateStars(fingerCount);
+                    
+                    if (elapsed >= 3000) {
+                        confirmRating(fingerCount);
+                    } else {
+                        msg.textContent = `检测到 ${fingerCount} 颗星，保持手势 ${Math.ceil((3000 - elapsed)/1000)} 秒确认...`;
+                        msg.style.background = 'rgba(255,200,100,0.3)';
+                    }
+                } else {
+                    lastGesture = fingerCount;
+                    gestureStartTime = now;
+                    updateStars(fingerCount);
+                    msg.textContent = `检测到 ${fingerCount} 颗星，请保持手势 3 秒确认`;
+                    msg.style.background = 'rgba(255,107,107,0.2)';
+                }
+            } else {
+                lastGesture = null;
+                gestureStartTime = null;
+                msg.textContent = '等待手势评分...';
+                msg.style.background = 'rgba(255,107,107,0.2)';
+            }
+        }
+
+        function updateStars(count) {
+            for (let i = 1; i <= 5; i++) {
+                const star = document.getElementById(`star${i}`);
+                star.classList.toggle('active', i <= count);
+            }
+            currentRating = count;
+        }
+
+        function confirmRating(rating) {
+            ratingCompleted = true;
+            disableCamera();
+            
+            const msg = document.getElementById('ratingMessage');
+            if (rating <= 2) {
+                msg.textContent = '非常抱歉，我们会继续努力的！';
+                msg.style.background = 'rgba(255,100,100,0.3)';
+            } else {
+                msg.textContent = '感谢您的支持！';
+                msg.style.background = 'rgba(100,255,100,0.3)';
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chat = document.getElementById('chatContainer');
+            chat.innerHTML += `<div class="chat-message user-message"><strong>你：</strong>${message}</div>`;
+            input.value = '';
+
+            const loading = document.createElement('div');
+            loading.className = 'chat-message ai-message';
+            loading.innerHTML = '<strong>AI：</strong><span class="loading"></span>';
+            chat.appendChild(loading);
+            chat.scrollTop = chat.scrollHeight;
+
+            try {
+                const body = {
+                    model: 'deepseek-chat',
+                    messages: [
+                        {role: 'system', content: '你是忍者杀手游戏的助手，可以回答关于游戏的问题。'},
+                        {role: 'user', content: message}
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 1000
+                };
+
+                const response = await fetch('https://models.sjtu.edu.cn/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer sk-S22FevcZnDu8xW6IVOknDQ'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const text = await response.text();
+                console.log('API响应:', text);
+                
+                if (!response.ok) {
+                    let err = `HTTP ${response.status}`;
+                    try { const data = JSON.parse(text); err = data.error?.message || err; } catch (e) {}
+                    throw new Error(err);
+                }
+
+                const data = JSON.parse(text);
+                if (data.error) {
+                    loading.innerHTML = `<strong>AI：</strong>错误: ${data.error.message || '未知错误'}`;
+                } else if (data.choices?.[0]) {
+                    loading.innerHTML = `<strong>AI：</strong>${data.choices[0].message?.content || '无回复'}`;
+                } else {
+                    loading.innerHTML = '<strong>AI：</strong>未能获取有效回复。';
+                }
+                chat.scrollTop = chat.scrollHeight;
+            } catch (error) {
+                loading.innerHTML = `<strong>AI：</strong>请求失败: ${error.message}`;
+                console.error('AI请求失败:', error);
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
